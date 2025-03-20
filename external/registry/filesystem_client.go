@@ -2,7 +2,6 @@ package registry
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"io/fs"
 	"os"
@@ -33,30 +32,34 @@ func IsGzipMagicBytes(b []byte) bool {
 	return bytes.Equal(b, []byte{0x1F, 0x8B})
 }
 
-func WalkDirFn(path string, d fs.DirEntry, err error) error {
-  if err != nil {
-    return err
-  }
-  if d.IsDir() || len(path) <= len(fsBlobsPath)+4 {
-    return nil
-  }
+func WalkDirFnGzipBlobs(path string, d fs.DirEntry, err error, gzipBlobs *[]string) error {
+	if err != nil {
+		return err
+	}
+	if d.IsDir() || len(path) <= len(fsBlobsPath)+4 {
+		return nil
+	}
 
-  gzip, err := IsFileGzip(path)
-  if err != nil {
-    return err
-  }
-  if gzip {
-    // TODO: something useful
-    fmt.Println(path)
-  }
+	gzip, err := IsFileGzip(path)
+	if err != nil {
+		return err
+	}
+	if gzip {
+		*gzipBlobs = append(*gzipBlobs, path)
+	}
 
 	return nil
 }
 
-func WalkFs() error {
-	err := filepath.WalkDir(fsBlobsPath, WalkDirFn)
+func WalkFs(root string) ([]string, error) {
+	var gzipBlobs []string
+
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		return WalkDirFnGzipBlobs(path, d, err, &gzipBlobs)
+	})
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+
+	return gzipBlobs, nil
 }
